@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { EnhancementEngine, EnhancementSettings, DEFAULT_SETTINGS } from "@/lib/enhancementEngine";
-import { CompareView } from "./CompareView";
 import { SettingsPanel } from "./SettingsPanel";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
