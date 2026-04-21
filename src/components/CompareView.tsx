@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 
 interface Props {
   /** The original (low-light) media element to render on the left. */
@@ -6,8 +6,6 @@ interface Props {
   /** The enhanced canvas to render on the right. */
   enhanced: ReactNode;
 }
-
-import { ReactNode } from "react";
 
 export const CompareView = ({ original, enhanced }: Props) => {
   const [pos, setPos] = useState(50);
@@ -42,28 +40,33 @@ export const CompareView = ({ original, enhanced }: Props) => {
       ref={ref}
       className="relative w-full aspect-video overflow-hidden rounded-2xl bg-black select-none shadow-elegant"
     >
-      <div className="absolute inset-0 flex items-center justify-center">{original}</div>
+      {/* Original (full size, sits underneath) */}
+      <div className="absolute inset-0 flex items-center justify-center [&>*]:max-h-full [&>*]:max-w-full [&>*]:object-contain">
+        {original}
+      </div>
+
+      {/* Enhanced clipped to left side, but inner content stays full-size */}
       <div
-        className="absolute inset-y-0 left-0 overflow-hidden flex items-center justify-center"
-        style={{ width: `${pos}%` }}
+        className="absolute inset-0 overflow-hidden"
+        style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}
       >
-        <div className="absolute inset-0 flex items-center justify-center" style={{ width: `${(100 / Math.max(pos, 0.01)) * 100}%` }}>
+        <div className="absolute inset-0 flex items-center justify-center [&>*]:max-h-full [&>*]:max-w-full [&>*]:object-contain">
           {enhanced}
         </div>
       </div>
 
       {/* Labels */}
-      <div className="absolute left-3 top-3 rounded-full bg-black/60 px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-white/80">
+      <div className="absolute left-3 top-3 z-30 rounded-full bg-black/60 px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-white/80 backdrop-blur">
         Enhanced
       </div>
-      <div className="absolute right-3 top-3 rounded-full bg-black/60 px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-white/80">
+      <div className="absolute right-3 top-3 z-30 rounded-full bg-black/60 px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-white/80 backdrop-blur">
         Original
       </div>
 
       {/* Handle */}
       <div
-        className="absolute inset-y-0 z-20 w-1 -translate-x-1/2 cursor-ew-resize bg-gradient-primary shadow-glow"
-        style={{ left: `${pos}%` }}
+        className="absolute inset-y-0 z-20 w-px -translate-x-1/2 cursor-ew-resize bg-gradient-primary"
+        style={{ left: `${pos}%`, boxShadow: "0 0 20px hsl(var(--primary) / 0.6)" }}
         onMouseDown={() => (dragging.current = true)}
         onTouchStart={() => (dragging.current = true)}
       >
