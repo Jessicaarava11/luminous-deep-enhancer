@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { EnhancementEngine, EnhancementSettings, DEFAULT_SETTINGS } from "@/lib/enhancementEngine";
-import { CompareView } from "./CompareView";
 import { SettingsPanel } from "./SettingsPanel";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -204,40 +203,7 @@ export const Studio = ({ user, onHistoryChanged }: Props) => {
     }
   };
 
-  const original = (() => {
-    if (sourceType === "image" || sourceType === "sample") {
-      return imageUrl ? (
-        <img
-          ref={imgRef}
-          src={imageUrl}
-          alt={title}
-          crossOrigin="anonymous"
-          onLoad={requestStill}
-          className="max-h-full max-w-full object-contain"
-        />
-      ) : null;
-    }
-    return (
-      <video
-        ref={videoRef}
-        src={videoUrl ?? undefined}
-        playsInline
-        muted
-        loop
-        autoPlay={!!videoUrl}
-        controls={sourceType === "video"}
-        className="max-h-full max-w-full object-contain"
-        onLoadedData={requestStill}
-      />
-    );
-  })();
-
-  const enhanced = (
-    <canvas
-      ref={canvasRef}
-      className="max-h-full max-w-full object-contain"
-    />
-  );
+  const isVideoSource = sourceType === "video" || sourceType === "webcam";
 
   return (
     <section id="studio" className="relative px-4 py-16 md:px-8 md:py-24">
@@ -245,13 +211,55 @@ export const Studio = ({ user, onHistoryChanged }: Props) => {
       <div className="mx-auto max-w-7xl">
         <div className="mb-10 text-center">
           <h2 className="font-display text-3xl font-bold md:text-5xl">The <span className="text-gradient">Studio</span></h2>
-          <p className="mt-3 text-muted-foreground">Drag a slider, drop an image, or open your camera.</p>
+          <p className="mt-3 text-muted-foreground">Upload an image or video, or open your webcam — see the original and enhanced result side by side.</p>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-          {/* Preview */}
+          {/* Preview — separate Original / Enhanced panels */}
           <div className="space-y-4">
-            <CompareView original={original} enhanced={enhanced} />
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* Original panel */}
+              <div className="relative aspect-video overflow-hidden rounded-2xl border border-white/10 bg-black shadow-elegant">
+                <div className="absolute left-3 top-3 z-10 rounded-full bg-black/60 px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider text-white/80 backdrop-blur">
+                  Original
+                </div>
+                <div className="flex h-full w-full items-center justify-center">
+                  {(sourceType === "image" || sourceType === "sample") && imageUrl && (
+                    <img
+                      ref={imgRef}
+                      src={imageUrl}
+                      alt={title}
+                      crossOrigin="anonymous"
+                      onLoad={requestStill}
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  )}
+                  {isVideoSource && (
+                    <video
+                      ref={videoRef}
+                      src={videoUrl ?? undefined}
+                      playsInline
+                      muted
+                      loop
+                      autoPlay={!!videoUrl || sourceType === "webcam"}
+                      controls={sourceType === "video"}
+                      className="max-h-full max-w-full object-contain"
+                      onLoadedData={requestStill}
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* Enhanced panel */}
+              <div className="relative aspect-video overflow-hidden rounded-2xl border border-primary/30 bg-black shadow-glow">
+                <div className="absolute left-3 top-3 z-10 rounded-full bg-gradient-primary px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider text-primary-foreground">
+                  Enhanced
+                </div>
+                <div className="flex h-full w-full items-center justify-center">
+                  <canvas ref={canvasRef} className="max-h-full max-w-full object-contain" />
+                </div>
+              </div>
+            </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl glass p-3">
               <div className="px-2 text-sm text-muted-foreground truncate max-w-[60%]">{title}</div>
