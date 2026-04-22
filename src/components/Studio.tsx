@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { EnhancementEngine, EnhancementSettings, DEFAULT_SETTINGS } from "@/lib/enhancementEngine";
 import { SettingsPanel } from "./SettingsPanel";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Upload, Image as ImageIcon, Video as VideoIcon, Camera, Download, Save, Loader2 } from "lucide-react";
+import { Upload, Image as ImageIcon, Video as VideoIcon, Camera, Download, Save, Loader2, X } from "lucide-react";
 import { SAMPLES } from "@/lib/sampleImages";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,12 +16,16 @@ interface Props {
   onHistoryChanged: () => void;
 }
 
+const MAX_IMAGE_MB = 25;
+const MAX_VIDEO_MB = 100;
+
 export const Studio = ({ user, onHistoryChanged }: Props) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const engineRef = useRef<EnhancementEngine | null>(null);
   const rafRef = useRef<number | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
 
   const [settings, setSettings] = useState<EnhancementSettings>({ ...DEFAULT_SETTINGS });
   const [sourceType, setSourceType] = useState<SourceType>("sample");
@@ -29,7 +33,9 @@ export const Studio = ({ user, onHistoryChanged }: Props) => {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [streamActive, setStreamActive] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loadingSource, setLoadingSource] = useState(false);
   const [title, setTitle] = useState<string>(SAMPLES[0].title);
+  const [isSampleUrl, setIsSampleUrl] = useState(true);
 
   // Init engine
   useEffect(() => {
@@ -44,33 +50,49 @@ export const Studio = ({ user, onHistoryChanged }: Props) => {
       engineRef.current?.dispose();
       engineRef.current = null;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
     };
   }, []);
 
-  // Sync settings into engine each render
-  useEffect(() => {
-    if (engineRef.current) engineRef.current.settings = settings;
-    // re-render still frame
-    requestStill();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings]);
-
   /** Render a single still frame from the current image, if any. */
-  const requestStill = () => {
+  const requestStill = useCallback(() => {
     const e = engineRef.current;
     if (!e) return;
     if (sourceType === "image" || sourceType === "sample") {
       const img = imgRef.current;
       if (img && img.complete && img.naturalWidth > 0) {
-        e.process(img, img.naturalWidth, img.naturalHeight);
+        try {
+          e.process(img, img.naturalWidth, img.naturalHeight);
+        } catch (err) {
+          console.error("Render error:", err);
+        }
       }
     } else if (sourceType === "video" || sourceType === "webcam") {
       const v = videoRef.current;
       if (v && v.readyState >= 2 && v.videoWidth > 0) {
-        e.process(v, v.videoWidth, v.videoHeight);
+        try {
+          e.process(v, v.videoWidth, v.videoHeight);
+        } catch (err) {
+          console.error("Render error:", err);
+        }
       }
     }
-  };
+  }, [sourceType]);
+
+  // Sync settings into engine + re-render
+  useEffect(() => {
+    if (engineRef.current) engineRef.current.settings = settings;
+    requestStill();
+  }, [settings, requestStill]);
+
+  // Re-render when source/url changes (still images)
+  useEffect(() => {
+    if (sourceType === "image" || sourceType === "sample") {
+      // Defer to allow img element to mount/load
+      const id = requestAnimationFrame(() => requestStill());
+      return () => cancelAnimationFrame(id);
+    }
+  }, [sourceType, imageUrl, requestStill]);
 
   // RAF loop for live sources
   useEffect(() => {
@@ -80,7 +102,11 @@ export const Studio = ({ user, onHistoryChanged }: Props) => {
       const e = engineRef.current;
       const v = videoRef.current;
       if (e && v && v.readyState >= 2 && !v.paused && v.videoWidth > 0) {
-        e.process(v, v.videoWidth, v.videoHeight);
+        try {
+          e.process(v, v.videoWidth, v.videoHeight);
+        } catch (err) {
+          console.error("Frame render error:", err);
+        }
       }
       rafRef.current = requestAnimationFrame(loop);
     };
@@ -90,7 +116,7 @@ export const Studio = ({ user, onHistoryChanged }: Props) => {
     };
   }, [sourceType, videoUrl, streamActive]);
 
-  // Cleanup webcam when leaving
+  // Cleanup webcam on unmount
   useEffect(() => {
     return () => stopWebcam();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -105,41 +131,80 @@ export const Studio = ({ user, onHistoryChanged }: Props) => {
     setStreamActive(false);
   };
 
+  const revokePrevObjectUrl = () => {
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+  };
+
   const handleImageFile = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file (JPG, PNG, WebP).");
+      return;
+    }
+    if (file.size > MAX_IMAGE_MB * 1024 * 1024) {
+      toast.error(`Image is too large. Max ${MAX_IMAGE_MB}MB.`);
+      return;
+    }
     stopWebcam();
+    revokePrevObjectUrl();
     const url = URL.createObjectURL(file);
-    setImageUrl(url);
+    objectUrlRef.current = url;
+    setLoadingSource(true);
+    setIsSampleUrl(false);
     setVideoUrl(null);
+    setImageUrl(url);
     setSourceType("image");
     setTitle(file.name);
+    toast.success("Image loaded");
   };
 
   const handleVideoFile = (file: File) => {
+    if (!file.type.startsWith("video/")) {
+      toast.error("Please select a video file (MP4, WebM).");
+      return;
+    }
+    if (file.size > MAX_VIDEO_MB * 1024 * 1024) {
+      toast.error(`Video is too large. Max ${MAX_VIDEO_MB}MB.`);
+      return;
+    }
     stopWebcam();
+    revokePrevObjectUrl();
     const url = URL.createObjectURL(file);
-    setVideoUrl(url);
+    objectUrlRef.current = url;
+    setLoadingSource(true);
+    setIsSampleUrl(false);
     setImageUrl(null);
+    setVideoUrl(url);
     setSourceType("video");
     setTitle(file.name);
+    toast.success("Video loaded");
   };
 
   const startWebcam = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      toast.error("Webcam isn't supported in this browser.");
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
         audio: false,
       });
-      setSourceType("webcam");
+      revokePrevObjectUrl();
       setVideoUrl(null);
       setImageUrl(null);
       setTitle("Webcam capture");
+      setSourceType("webcam");
       // wait a tick for video el
       requestAnimationFrame(() => {
         const v = videoRef.current;
         if (v) {
           v.srcObject = stream;
-          v.play();
+          v.play().catch((err) => console.error("Webcam play error:", err));
           setStreamActive(true);
+          toast.success("Webcam started");
         }
       });
     } catch (e) {
@@ -150,19 +215,33 @@ export const Studio = ({ user, onHistoryChanged }: Props) => {
 
   const pickSample = (s: (typeof SAMPLES)[number]) => {
     stopWebcam();
+    revokePrevObjectUrl();
+    setLoadingSource(true);
+    setIsSampleUrl(true);
     setSourceType("sample");
-    setImageUrl(s.url);
     setVideoUrl(null);
+    setImageUrl(s.url);
     setTitle(s.title);
+  };
+
+  const clearSource = () => {
+    stopWebcam();
+    revokePrevObjectUrl();
+    setImageUrl(null);
+    setVideoUrl(null);
+    setTitle("No source");
   };
 
   const downloadEnhanced = async () => {
     const blob = await engineRef.current?.toBlob("image/png");
-    if (!blob) return;
+    if (!blob) {
+      toast.error("Nothing to download yet.");
+      return;
+    }
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `lumen-${Date.now()}.png`;
+    a.download = `haske-${Date.now()}.png`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -173,9 +252,12 @@ export const Studio = ({ user, onHistoryChanged }: Props) => {
       return;
     }
     if (!engineRef.current || !canvasRef.current) return;
+    if (canvasRef.current.width === 0) {
+      toast.error("Load a source before saving.");
+      return;
+    }
     setSaving(true);
     try {
-      // Render a thumbnail
       const blob = await engineRef.current.toBlob("image/jpeg", 0.85);
       if (!blob) throw new Error("Couldn't capture frame");
       const path = `${user.id}/${Date.now()}.jpg`;
@@ -204,6 +286,7 @@ export const Studio = ({ user, onHistoryChanged }: Props) => {
   };
 
   const isVideoSource = sourceType === "video" || sourceType === "webcam";
+  const hasSource = !!(imageUrl || videoUrl || streamActive);
 
   return (
     <section id="studio" className="relative px-4 py-16 md:px-8 md:py-24">
@@ -223,14 +306,27 @@ export const Studio = ({ user, onHistoryChanged }: Props) => {
                 <div className="absolute left-3 top-3 z-10 rounded-full bg-black/60 px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider text-white/80 backdrop-blur">
                   Original
                 </div>
+                {loadingSource && (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  </div>
+                )}
                 <div className="flex h-full w-full items-center justify-center">
                   {(sourceType === "image" || sourceType === "sample") && imageUrl && (
                     <img
+                      key={imageUrl}
                       ref={imgRef}
                       src={imageUrl}
                       alt={title}
-                      crossOrigin="anonymous"
-                      onLoad={requestStill}
+                      {...(isSampleUrl ? { crossOrigin: "anonymous" as const } : {})}
+                      onLoad={() => {
+                        setLoadingSource(false);
+                        requestStill();
+                      }}
+                      onError={() => {
+                        setLoadingSource(false);
+                        toast.error("Couldn't load that image.");
+                      }}
                       className="max-h-full max-w-full object-contain"
                     />
                   )}
@@ -244,8 +340,21 @@ export const Studio = ({ user, onHistoryChanged }: Props) => {
                       autoPlay={!!videoUrl || sourceType === "webcam"}
                       controls={sourceType === "video"}
                       className="max-h-full max-w-full object-contain"
-                      onLoadedData={requestStill}
+                      onLoadedData={() => {
+                        setLoadingSource(false);
+                        requestStill();
+                      }}
+                      onError={() => {
+                        setLoadingSource(false);
+                        toast.error("Couldn't load that video.");
+                      }}
                     />
+                  )}
+                  {!hasSource && !loadingSource && (
+                    <div className="text-center text-sm text-muted-foreground">
+                      <ImageIcon className="mx-auto mb-2 h-8 w-8 opacity-40" />
+                      <p>No source loaded</p>
+                    </div>
                   )}
                 </div>
               </div>
@@ -262,16 +371,27 @@ export const Studio = ({ user, onHistoryChanged }: Props) => {
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl glass p-3">
-              <div className="px-2 text-sm text-muted-foreground truncate max-w-[60%]">{title}</div>
+              <div className="flex items-center gap-2 px-2 text-sm text-muted-foreground truncate max-w-[60%]">
+                <span className="truncate">{title}</span>
+                {hasSource && (
+                  <button
+                    onClick={clearSource}
+                    className="text-muted-foreground/60 hover:text-foreground"
+                    aria-label="Clear source"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" className="rounded-full glass border-white/10" onClick={downloadEnhanced}>
+                <Button variant="outline" size="sm" className="rounded-full glass border-white/10" onClick={downloadEnhanced} disabled={!hasSource}>
                   <Download className="mr-1.5 h-4 w-4" /> PNG
                 </Button>
                 <Button
                   size="sm"
                   className="rounded-full bg-gradient-primary text-primary-foreground"
                   onClick={saveToHistory}
-                  disabled={saving}
+                  disabled={saving || !hasSource}
                 >
                   {saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
                   Save
@@ -331,7 +451,7 @@ export const Studio = ({ user, onHistoryChanged }: Props) => {
                 <Dropzone
                   accept="image/*"
                   onFile={handleImageFile}
-                  hint="Drop an image (JPG / PNG / WebP)"
+                  hint={`Drop an image (JPG / PNG / WebP) — up to ${MAX_IMAGE_MB}MB`}
                 />
               </TabsContent>
 
@@ -339,7 +459,7 @@ export const Studio = ({ user, onHistoryChanged }: Props) => {
                 <Dropzone
                   accept="video/*"
                   onFile={handleVideoFile}
-                  hint="Drop a video (MP4 / WebM)"
+                  hint={`Drop a video (MP4 / WebM) — up to ${MAX_VIDEO_MB}MB`}
                 />
               </TabsContent>
 
@@ -357,10 +477,6 @@ export const Studio = ({ user, onHistoryChanged }: Props) => {
             <SettingsPanel settings={settings} onChange={setSettings} />
           </div>
         </div>
-
-        {/* Hidden file inputs */}
-        <input id="img-input" type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && handleImageFile(e.target.files[0])} />
-        <input id="vid-input" type="file" accept="video/*" className="hidden" onChange={(e) => e.target.files?.[0] && handleVideoFile(e.target.files[0])} />
       </div>
     </section>
   );
@@ -400,7 +516,12 @@ const Dropzone = ({
         type="file"
         accept={accept}
         className="hidden"
-        onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) onFile(f);
+          // reset so re-uploading the same file fires onChange
+          e.target.value = "";
+        }}
       />
     </label>
   );
