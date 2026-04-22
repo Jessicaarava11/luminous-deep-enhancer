@@ -288,7 +288,7 @@ export const Studio = ({ user, onHistoryChanged }: Props) => {
                 if (v === "webcam") {
                   startWebcam();
                 } else if (v === "image" || v === "video" || v === "sample") {
-                  if (v !== "webcam") stopWebcam();
+                  stopWebcam();
                   setSourceType(v as SourceType);
                 }
               }}
