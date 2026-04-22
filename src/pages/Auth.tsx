@@ -53,7 +53,7 @@ const Auth = () => {
       <div className="relative z-10 mx-auto flex min-h-screen max-w-md flex-col items-center justify-center px-6">
         <div className="mb-6 flex items-center gap-2 text-sm font-medium text-muted-foreground">
           <Sparkles className="h-4 w-4 text-primary" />
-          <span className="font-display">LumenAI</span>
+          <span className="font-display">HaskeAi</span>
         </div>
 
         <div className="w-full glass rounded-2xl p-8 shadow-elegant">
@@ -93,7 +93,7 @@ const Auth = () => {
         </div>
 
         <button onClick={() => navigate("/")} className="mt-6 text-xs text-muted-foreground hover:text-foreground">
-          ← Back to LumenAI
+          ← Back to HaskeAi
         </button>
       </div>
     </div>

@@ -32,7 +32,7 @@ export const Hero = ({ onLaunch }: HeroProps) => {
         <div className="animate-fade-up [animation-delay:80ms]">
           <span className="inline-flex items-center gap-2 rounded-full glass px-4 py-1.5 text-xs font-medium tracking-wide text-foreground/80">
             <Sparkles className="h-3.5 w-3.5 text-primary" />
-            Zero-DCE × Retinex pack/unpack engine
+            HaskeAi
           </span>
         </div>
 
@@ -43,8 +43,8 @@ export const Hero = ({ onLaunch }: HeroProps) => {
         </h1>
 
         <p className="mt-6 max-w-2xl text-base text-foreground/75 sm:text-lg md:text-xl animate-fade-up [animation-delay:380ms]">
-          LumenAI restores low-light photos, video, and live webcam streams in real time —
-          right inside your browser. No upload. No wait. Just light.
+          HaskeAi restores low-light photos, video, and live webcam streams in real time —
+          right inside your browser. Upload images & videos or stream from your webcam. Just light.
         </p>
 
         <div className="mt-10 flex flex-wrap items-center justify-center gap-4 animate-fade-up [animation-delay:560ms]">

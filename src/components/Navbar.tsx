@@ -15,7 +15,7 @@ export const Navbar = ({ user, onSignOut }: Props) => {
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 md:px-6">
         <a href="#top" className="flex items-center gap-2 rounded-full glass px-3 py-1.5">
           <Sparkles className="h-4 w-4 text-primary" />
-          <span className="font-display text-sm font-semibold">LumenAI</span>
+          <span className="font-display text-sm font-semibold">HaskeAi</span>
         </a>
         <nav className="hidden items-center gap-1 rounded-full glass px-2 py-1 md:flex">
           <a href="#studio" className="rounded-full px-3 py-1.5 text-xs font-medium text-foreground/80 hover:bg-white/5 hover:text-foreground">Studio</a>
