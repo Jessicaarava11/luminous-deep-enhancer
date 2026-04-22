@@ -282,18 +282,28 @@ export const Studio = ({ user, onHistoryChanged }: Props) => {
 
           {/* Controls */}
           <div className="space-y-4">
-            <Tabs value={sourceType === "sample" ? "sample" : sourceType} onValueChange={(v) => v === "webcam" ? startWebcam() : null}>
+            <Tabs
+              value={sourceType === "sample" ? "sample" : sourceType}
+              onValueChange={(v) => {
+                if (v === "webcam") {
+                  startWebcam();
+                } else if (v === "image" || v === "video" || v === "sample") {
+                  stopWebcam();
+                  setSourceType(v as SourceType);
+                }
+              }}
+            >
               <TabsList className="grid w-full grid-cols-4 rounded-full glass p-1">
-                <TabsTrigger value="sample" onClick={() => setSourceType("sample")} className="rounded-full data-[state=active]:bg-gradient-primary data-[state=active]:text-primary-foreground">
+                <TabsTrigger value="sample" className="rounded-full data-[state=active]:bg-gradient-primary data-[state=active]:text-primary-foreground">
                   <ImageIcon className="h-4 w-4" />
                 </TabsTrigger>
-                <TabsTrigger value="image" onClick={() => document.getElementById("img-input")?.click()} className="rounded-full data-[state=active]:bg-gradient-primary data-[state=active]:text-primary-foreground">
+                <TabsTrigger value="image" className="rounded-full data-[state=active]:bg-gradient-primary data-[state=active]:text-primary-foreground">
                   <Upload className="h-4 w-4" />
                 </TabsTrigger>
-                <TabsTrigger value="video" onClick={() => document.getElementById("vid-input")?.click()} className="rounded-full data-[state=active]:bg-gradient-primary data-[state=active]:text-primary-foreground">
+                <TabsTrigger value="video" className="rounded-full data-[state=active]:bg-gradient-primary data-[state=active]:text-primary-foreground">
                   <VideoIcon className="h-4 w-4" />
                 </TabsTrigger>
-                <TabsTrigger value="webcam" onClick={startWebcam} className="rounded-full data-[state=active]:bg-gradient-primary data-[state=active]:text-primary-foreground">
+                <TabsTrigger value="webcam" className="rounded-full data-[state=active]:bg-gradient-primary data-[state=active]:text-primary-foreground">
                   <Camera className="h-4 w-4" />
                 </TabsTrigger>
               </TabsList>
